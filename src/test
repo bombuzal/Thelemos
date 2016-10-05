@@ -1,0 +1,9 @@
+EFI_UNICODE_COLLATION_INTERFACE   LibStubUnicodeInterface = {
+    LibStubStriCmp,
+    LibStubMetaiMatch,
+    LibStubStrLwrUpr,
+    LibStubStrLwrUpr,
+    NULL,   // FatToStr
+    NULL,   // StrToFat
+    NULL    // SupportedLanguages
+}; 
