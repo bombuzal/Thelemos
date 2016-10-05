@@ -1,7 +1,7 @@
 #
 # Create a FAT filesystem image
 #
-
+[ -f build/BOOTX64.EFI ] || ./build.sh
 dd if=/dev/zero of=build/fat.img bs=1k count=1440
 mformat -i build/fat.img -f 1440 ::
 mmd -i build/fat.img ::/EFI

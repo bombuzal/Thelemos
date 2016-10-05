@@ -34,7 +34,7 @@ tar jxf gnu-efi-3.0.4.tar.bz2
 wget -N -q "http://sourceforge.mirrorservice.org/e/ed/edk2/OVMF/OVMF-$arch-$ovmf.zip"
 unzip -o -q OVMF-X64-$ovmf.zip OVMF.fd
 mkdir bios
-mv OVMF.fs bios/
+mv OVMF.fd bios/
 cd ..
 
 ## test:

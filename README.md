@@ -3,9 +3,9 @@
 A modern conformant Unix-like operating system for virtual machines and embedded devices.
 
 ### Target features
-* EFI
+* UEFI boot
 * 64-bit Hybrid kernel
-* POSIX (POSIX:2001/SUSv3)
+* POSIX (>=POSIX:2001/SUSv3)
 
 ### Hardware support
 * RTL8139
