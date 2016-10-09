@@ -1,6 +1,12 @@
 #include <efi.h>
 #include <efilib.h>
 
+/**
+ * efi_main - The entry point for the EFI application
+ * @ImageHandle: firmware-allocated handle that identifies the image
+ * @SystemTable: EFI system table
+ */
+
 EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 {
     EFI_STATUS Status;

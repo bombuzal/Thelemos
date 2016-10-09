@@ -1,0 +1,204 @@
+// Joshua Zepf
+// EFI Program to pull and read a file
+// 5-12-2016
+
+#include <efi.h>
+#include <efilib.h>
+
+static EFI_GUID SimpleFSProtocolGUID = SIMPLE_FILE_SYSTEM_PROTOCOL;
+ //static EFI_GUID TEST_PROTOCOL = SIMPLE_TEXT_OUTPUT_PROTOCOL;
+static EFI_GUID FileInfoGUID = EFI_FILE_INFO_ID;
+
+EFI_STATUS
+read_file_data(CHAR16* fileName)
+{
+    EFI_STATUS status;
+    UINTN index;
+    UINTN handleCount;
+    UINTN scratchBufferSize = 0;
+    EFI_HANDLE* handleBuffer;
+    EFI_FILE* root;
+    EFI_FILE* fileHandle;
+    EFI_FILE_INFO* fileInfo;
+    EFI_FILE_IO_INTERFACE* fileSystem;
+
+    VOID* buffer;
+    UINTN* bufferSize = NULL;
+
+    fileInfo = NULL;
+    fileHandle = NULL;
+
+    // Establish a buffer of all the handles associated with Simple FS Protocol
+    status = uefi_call_wrapper(BS->LocateHandleBuffer, 5,
+                                ByProtocol,
+                                &SimpleFSProtocolGUID,
+                                NULL,
+                                &handleCount,
+                                &handleBuffer);
+    if (!handleCount || !handleBuffer)
+    {
+        Print(L"Could not retrieve handle(s) for SIMPLE_FILE_SYSTEM_PROTOCOL\n");
+        return EFI_NOT_FOUND;
+    }
+
+    // Find the correct handle/protocol match
+    status = uefi_call_wrapper(BS->HandleProtocol, 3,
+                                handleBuffer[0], // Probably shouldn"t hardcode
+                                &SimpleFSProtocolGUID,
+                                &fileSystem);
+    if (status != EFI_SUCCESS)
+    {
+        Print(L"Failed to get handle/protocol match\n");
+        goto End;
+    }
+
+    // Open volume to obtain root
+    status = uefi_call_wrapper(fileSystem->OpenVolume, 2,
+                                fileSystem,
+                                &root);
+    if (status != EFI_SUCCESS)
+    {
+        Print(L"Failed to open volume\n");
+        goto End;
+    }
+
+    // Open the text file; Need multiple open calls if text file is in a deeper directory
+    status = uefi_call_wrapper(root->Open, 5,
+                                root,
+                                &fileHandle,
+                                fileName,
+                                EFI_FILE_MODE_READ,
+                                0);
+    if (status != EFI_SUCCESS)
+    {
+        Print(L"Failed to open file\n");
+        goto End;
+    }
+    FreePool(handleBuffer);
+
+    // Figure out how big the file is
+    scratchBufferSize = 0;
+    status = uefi_call_wrapper(fileHandle->GetInfo, 4,
+                                fileHandle,
+                                &FileInfoGUID,
+                                &scratchBufferSize,
+                                NULL);
+    if (status != EFI_SUCCESS && status != EFI_BUFFER_TOO_SMALL)
+    {
+        Print(L"Can't obtain file size info for input file: %s\n", fileName);
+        goto End;
+    }
+
+    // Allocate memory and obtain memory for test.txt
+    status = uefi_call_wrapper(BS->AllocatePool, 3,
+                                EfiBootServicesData,
+                                scratchBufferSize,
+                                &fileInfo);
+    if (fileInfo == NULL)
+    {
+        Print(L"Can't allocate enough memory for input file: %s\n", fileName);
+        status = EFI_OUT_OF_RESOURCES;
+        goto End;
+    }
+    status = uefi_call_wrapper(fileHandle->GetInfo, 4,
+                                fileHandle,
+                                &FileInfoGUID,
+                                &scratchBufferSize,
+                                fileInfo);
+    if (status != EFI_SUCCESS)
+    {
+        Print(L"Unable to obtain file data for input file: %s\n", fileName);
+        status = EFI_DEVICE_ERROR;
+        goto End;
+    }
+    else
+        Print(L"Successfully obtained file data\n");
+
+    // Allocate a buffer for the file
+    *bufferSize = (UINT32) fileInfo->FileSize;
+    status = uefi_call_wrapper(BS->AllocatePool, 3,
+                                EfiBootServicesData,
+                                *bufferSize,
+                                &buffer);
+    if (buffer == NULL)
+    {
+        Print(L"Unable to allocate a buffer for input file: %s\n", fileName);
+        status = EFI_OUT_OF_RESOURCES;
+        goto End;
+    }
+    else
+        Print(L"Successfully allocated buffer\n");
+
+    // // 0 out buffer
+    // uefi_call_wrapper(BS->SetMem, 3,
+    //                     *buffer,
+    //                     *bufferSize,
+    //                     0);
+    // if (status != EFI_SUCCESS)
+    // {
+    //     Print(L"Unable to 0 out buffer\n");
+    //     goto End;
+    // }
+    // else
+    //     Print(L"Successfully 0'd out buffer\n");
+
+    // Load file into allocated memory
+    status = uefi_call_wrapper(fileHandle->Read, 3,
+                                fileHandle,
+                                bufferSize,
+                                buffer);
+    if (status != EFI_SUCCESS)
+    {
+        FreePool(buffer);
+        Print(L"Unable to read the input file: %s\n", fileName);
+        Print(L"status: %x\n", status);
+        status = EFI_DEVICE_ERROR;
+        goto End;
+    }
+    else
+        Print(L"Successfully read file into buffer\n");
+
+    // Print contents of buffer
+    int i;
+    for (i = 0; i < *bufferSize; i++)
+    {
+        Print(L"%c", *(char*)(buffer+i));
+    }
+    Print(L"\n");
+
+    // Close the file
+    status = uefi_call_wrapper(fileHandle->Close, 1, fileHandle);
+    if (status != EFI_SUCCESS)
+    {
+        FreePool(buffer);
+        Print(L"Unable to close the input file: %s\n", fileName);
+        status = EFI_DEVICE_ERROR;
+        goto End;
+    }
+    else
+        Print(L"Successfully closed file\n");
+
+    // Do some cleanup and return
+  End:
+    if (fileInfo != NULL)
+        FreePool(fileInfo);
+    return status;
+}
+
+
+
+EFI_STATUS
+efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE* systab)
+{
+    EFI_STATUS status;
+    InitializeLib(image, systab);
+    Print(L"Hello, World\n");
+
+    CHAR16* name;
+    name = L"test.txt";
+    Print(L"Reading file (%s)...\n", name);
+    status = read_file_data(name);
+    Print(L"Read Complete\n");
+
+    return status;
+}
